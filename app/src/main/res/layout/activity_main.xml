@@ -8,7 +8,7 @@
     android:keepScreenOn="true"
     tools:context=".MainActivity">
 
-    <org.opencv.android.JavaCameraView
+    <il.ac.huji.cs.cv.cvdropcounter.BetterCameraView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="gone"
@@ -33,5 +33,54 @@
         app:layout_constraintStart_toStartOf="parent"
         app:layout_constraintTop_toTopOf="parent"
         app:layout_constraintVertical_bias="0.0" />
+
+    <LinearLayout
+        android:id="@+id/controls"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="8dp"
+        android:orientation="vertical"
+        android:background="#ffffff"
+        android:alpha="0.5"
+        app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            >
+            <TextView
+                android:text="low: "
+                android:layout_width="40dp"
+                android:layout_height="wrap_content" />
+            <EditText
+                android:id="@+id/cannylow"
+                android:inputType="numberDecimal"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content" />
+
+        </LinearLayout>
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            >
+            <TextView
+                android:text="high: "
+                android:layout_width="40dp"
+                android:layout_height="wrap_content" />
+            <EditText
+                android:id="@+id/cannyhigh"
+                android:inputType="numberDecimal"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content" />
+
+        </LinearLayout>
+
+
+    </LinearLayout>
 
 </android.support.constraint.ConstraintLayout>
