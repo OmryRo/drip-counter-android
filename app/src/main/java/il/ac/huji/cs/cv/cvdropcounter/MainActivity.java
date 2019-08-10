@@ -64,6 +64,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private Point centerSecond;
     private int timesTillReset;
 
+    private Point[] dropChamberArea;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -271,142 +273,8 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         try {
 
-            Imgproc.pyrDown(gray, dsIMG, new Size(gray.cols() / 2, gray.rows() / 2));
-            Imgproc.pyrUp(dsIMG, usIMG, gray.size());
-            Imgproc.Canny(usIMG, bwIMG, cannyLow, cannyHigh);
-            Imgproc.dilate(bwIMG, bwIMG, new Mat(), new Point(-1, 1), 1);
-
-            cIMG = bwIMG.clone();
-
-            List<MatOfPoint> contours = new ArrayList<>();
-            Imgproc.findContours(cIMG, contours, hovIMG, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
-
-            List<Object[]> found = new ArrayList<>();
-
-            for (MatOfPoint cnt : contours) {
-
-                MatOfPoint2f curve = new MatOfPoint2f(cnt.toArray());
-                Imgproc.approxPolyDP(curve, approxCurve, 0.02 * Imgproc.arcLength(curve, true), true);
-                int numberVertices = (int) approxCurve.total();
-
-                // we don't have what to do with lines and tingles
-                if (numberVertices <= 3) {
-                    continue;
-                }
-
-                double contourArea = Math.abs(Imgproc.contourArea(cnt));
-
-                boolean inSize = contourArea > 6000 && contourArea < 20000;
-
-                if (!inSize) {
-                    continue;
-                }
-
-                Point[] points = approxCurve.toArray();
-                Object[] results = new Object[] {cnt, curve, numberVertices, contourArea, points};
-                found.add(results);
-            }
-
-            ArrayList<Point> centers = new ArrayList<>();
-            for (Object[] result : found) {
-                MatOfPoint cnt = (MatOfPoint) result[0];
-                MatOfPoint2f curve = (MatOfPoint2f) result[1];
-                int numberVertices = (int) result[2];
-                double contourArea = (double) result[3];
-                Point[] points = (Point[]) result[4];
-
-                double centerX = 0;
-                double centerY = 0;
-                for (Point point : points) {
-                    centerX += point.x;
-                    centerY += point.y;
-                }
-                Point center = new Point(centerX / numberVertices, centerY / numberVertices);
-                centers.add(center);
-
-                for (int j = 0; j < numberVertices; j++) {
-                    Point pt0 = points[j];
-                    Point pt1 = points[(j + 1) % numberVertices];
-                    Imgproc.line(dst, pt0, pt1, (true ? scalarsG : scalarsB)[0], 3);
-                }
-
-
-                Mat overlay = new Mat();
-                dst.copyTo(overlay);
-                Imgproc.fillConvexPoly(overlay, cnt, (true ? scalarsG : scalarsB)[0]);
-                Imgproc.circle(overlay, center, 10, scalarsB[0], Imgproc.FILLED);
-                Core.addWeighted(overlay, 0.4, dst, 0.6, 0, dst);
-
-                setLabel(dst, String.format("%.2f,%d", contourArea, numberVertices), cnt, 3, (true ? scalarsG : scalarsB)[0]);
-            }
-
-            boolean isCloseToCenter = false;
-            if (centers.size() == 2) {
-
-                Point point0 = centers.get(0);
-                Point point1 = centers.get(1);
-
-                Imgproc.line(dst, point0, point1, scalarsG[0], 6);
-
-                if (timesTillReset <= 0) {
-                    centerFirst = point0;
-                    centerSecond = point1;
-                    isCloseToCenter = true;
-
-                } else {
-
-                    double point0toFirst = distance2(point0, centerFirst);
-                    double point0toSecond = distance2(point0, centerSecond);
-                    double point1toFirst = distance2(point1, centerFirst);
-                    double point1toSecond = distance2(point1, centerSecond);
-
-                    double maxDist = MAX_DISTANCE_TO_IGNORE * MAX_DISTANCE_TO_IGNORE;
-                    if (point0toFirst < point1toFirst && point0toFirst <= maxDist && point1toSecond <= maxDist) {
-                        centerFirst.x = (centerFirst.x + point0.x) / 2;
-                        centerFirst.y = (centerFirst.y + point0.y) / 2;
-                        centerSecond.x = (centerSecond.x + point1.x) / 2;
-                        centerSecond.y = (centerSecond.y + point1.y) / 2;
-                        isCloseToCenter = true;
-
-                    } else if (point0toFirst >= point1toFirst && point1toFirst <= maxDist && point0toSecond <= maxDist) {
-                        centerFirst.x = (centerFirst.x + point1.x) / 2;
-                        centerFirst.y = (centerFirst.y + point1.y) / 2;
-                        centerSecond.x = (centerSecond.x + point0.x) / 2;
-                        centerSecond.y = (centerSecond.y + point0.y) / 2;
-                        isCloseToCenter = true;
-
-                    }
-
-                }
-            }
-
-            if (isCloseToCenter) {
-                timesTillReset = MAX_TIMES_TILL_RESET;
-            } else {
-                timesTillReset--;
-
-            }
-
-            if (centerFirst.dot(centerSecond) != 0) {
-                Imgproc.line(dst, centerFirst, centerSecond, scalarsB[0], 6);
-
-                if (timesTillReset > 0) {
-
-                    double top = Math.min(centerFirst.y, centerSecond.y);
-                    double bottom = Math.max(centerFirst.y, centerSecond.y);
-                    double left = Math.min(centerFirst.x, centerSecond.x);
-                    double right = Math.max(centerFirst.x, centerSecond.x);
-
-                    double paddingY = (bottom - top) * 0.3;
-                    double paddingX = (right - left) * 1.5;
-
-                    Point topLeft = new Point(left - paddingX, top - paddingY);
-                    Point bottomRight = new Point(right + paddingX, bottom + paddingY);
-                    Scalar white = new Scalar(255, 255, 255, 255);
-
-                    Imgproc.rectangle(dst, topLeft, bottomRight, white, 5);
-                }
-            }
+            detectDropChamber(dst, gray);
+//            detectDrops(dst, gray);
 
         } catch (Exception e) {
             Log.e("bla", "onCameraFrame: ", e);
@@ -414,10 +282,187 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         switch (mViewMode) {
             case VIEW_MODE_CANNY:
-                return cIMG;
+                return cIMG == null ? dst : cIMG;
             default:
                 return dst;
         }
+    }
+
+    private Mat detectDropChamber(Mat dst, Mat gray) {
+        Imgproc.pyrDown(gray, dsIMG, new Size(gray.cols() / 2, gray.rows() / 2));
+        Imgproc.pyrUp(dsIMG, usIMG, gray.size());
+        Imgproc.Canny(usIMG, bwIMG, cannyLow, cannyHigh);
+        Imgproc.dilate(bwIMG, bwIMG, new Mat(), new Point(-1, 1), 1);
+
+        cIMG = bwIMG.clone();
+
+        List<MatOfPoint> contours = new ArrayList<>();
+        Imgproc.findContours(cIMG, contours, hovIMG, Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+
+        List<Object[]> found = new ArrayList<>();
+
+        for (MatOfPoint cnt : contours) {
+
+            MatOfPoint2f curve = new MatOfPoint2f(cnt.toArray());
+            Imgproc.approxPolyDP(curve, approxCurve, 0.02 * Imgproc.arcLength(curve, true), true);
+            int numberVertices = (int) approxCurve.total();
+
+            // we don't have what to do with lines and tingles
+            if (numberVertices <= 3) {
+                continue;
+            }
+
+            double contourArea = Math.abs(Imgproc.contourArea(cnt));
+
+            boolean inSize = contourArea > 6000 && contourArea < 20000;
+
+            if (!inSize) {
+                continue;
+            }
+
+            Point[] points = approxCurve.toArray();
+            Object[] results = new Object[] {cnt, curve, numberVertices, contourArea, points};
+            found.add(results);
+        }
+
+        ArrayList<Point> centers = new ArrayList<>();
+        for (Object[] result : found) {
+            MatOfPoint cnt = (MatOfPoint) result[0];
+            MatOfPoint2f curve = (MatOfPoint2f) result[1];
+            int numberVertices = (int) result[2];
+            double contourArea = (double) result[3];
+            Point[] points = (Point[]) result[4];
+
+            double centerX = 0;
+            double centerY = 0;
+            for (Point point : points) {
+                centerX += point.x;
+                centerY += point.y;
+            }
+            Point center = new Point(centerX / numberVertices, centerY / numberVertices);
+            centers.add(center);
+
+            for (int j = 0; j < numberVertices; j++) {
+                Point pt0 = points[j];
+                Point pt1 = points[(j + 1) % numberVertices];
+                Imgproc.line(dst, pt0, pt1, (true ? scalarsG : scalarsB)[0], 3);
+            }
+
+
+            Mat overlay = new Mat();
+            dst.copyTo(overlay);
+            Imgproc.fillConvexPoly(overlay, cnt, (true ? scalarsG : scalarsB)[0]);
+            Imgproc.circle(overlay, center, 10, scalarsB[0], Imgproc.FILLED);
+            Core.addWeighted(overlay, 0.4, dst, 0.6, 0, dst);
+
+            setLabel(dst, String.format("%.2f,%d", contourArea, numberVertices), cnt, 3, (true ? scalarsG : scalarsB)[0]);
+        }
+
+        boolean isCloseToCenter = false;
+        if (centers.size() == 2) {
+
+            Point point0 = centers.get(0);
+            Point point1 = centers.get(1);
+
+            Imgproc.line(dst, point0, point1, scalarsG[0], 6);
+
+            if (timesTillReset <= 0) {
+                centerFirst = point0;
+                centerSecond = point1;
+                isCloseToCenter = true;
+
+            } else {
+
+                double point0toFirst = distance2(point0, centerFirst);
+                double point0toSecond = distance2(point0, centerSecond);
+                double point1toFirst = distance2(point1, centerFirst);
+                double point1toSecond = distance2(point1, centerSecond);
+
+                double maxDist = MAX_DISTANCE_TO_IGNORE * MAX_DISTANCE_TO_IGNORE;
+                if (point0toFirst < point1toFirst && point0toFirst <= maxDist && point1toSecond <= maxDist) {
+                    centerFirst.x = (centerFirst.x + point0.x) / 2;
+                    centerFirst.y = (centerFirst.y + point0.y) / 2;
+                    centerSecond.x = (centerSecond.x + point1.x) / 2;
+                    centerSecond.y = (centerSecond.y + point1.y) / 2;
+                    isCloseToCenter = true;
+
+                } else if (point0toFirst >= point1toFirst && point1toFirst <= maxDist && point0toSecond <= maxDist) {
+                    centerFirst.x = (centerFirst.x + point1.x) / 2;
+                    centerFirst.y = (centerFirst.y + point1.y) / 2;
+                    centerSecond.x = (centerSecond.x + point0.x) / 2;
+                    centerSecond.y = (centerSecond.y + point0.y) / 2;
+                    isCloseToCenter = true;
+
+                }
+
+            }
+        }
+
+        if (isCloseToCenter) {
+            timesTillReset = MAX_TIMES_TILL_RESET;
+        } else {
+            timesTillReset--;
+
+        }
+
+        if (centerFirst.dot(centerSecond) != 0) {
+            Imgproc.line(dst, centerFirst, centerSecond, scalarsB[0], 6);
+
+            if (timesTillReset > 0) {
+
+                double top = Math.min(centerFirst.y, centerSecond.y);
+                double bottom = Math.max(centerFirst.y, centerSecond.y);
+                double left = Math.min(centerFirst.x, centerSecond.x);
+                double right = Math.max(centerFirst.x, centerSecond.x);
+
+                double paddingY = (bottom - top) * 0.3;
+                double paddingX = (right - left) * 1.5;
+
+                Point topLeft = new Point(left - paddingX, top - paddingY);
+                Point bottomRight = new Point(right + paddingX, bottom + paddingY);
+                Scalar white = new Scalar(255, 255, 255, 255);
+
+                Imgproc.rectangle(dst, topLeft, bottomRight, white, 5);
+
+                dropChamberArea = new Point[] {topLeft, bottomRight};
+            }
+        }
+
+        return dst;
+    }
+
+    private Mat detectDrops(Mat dst, Mat gray) {
+        //if (dropChamberArea == null) {
+        //    return dst;
+        //}
+
+        //Point topLeft = dropChamberArea[0];
+        //Point bottomRight = dropChamberArea[1];
+
+        Mat circles = new Mat();
+
+        Imgproc.pyrDown(gray, dsIMG, new Size(gray.cols() / 2, gray.rows() / 2));
+        Imgproc.pyrUp(dsIMG, usIMG, gray.size());
+        Imgproc.HoughCircles(usIMG, circles, Imgproc.CV_HOUGH_GRADIENT, 2, usIMG.height() / 4, 500, 50, 0, 0);
+
+        if (circles.cols() > 0) {
+            for (int x=0; x < Math.min(circles.cols(), 5); x++ ) {
+                double circleVec[] = circles.get(0, x);
+
+                if (circleVec == null) {
+                    break;
+                }
+
+                Point center = new Point((int) circleVec[0], (int) circleVec[1]);
+                int radius = (int) circleVec[2];
+
+                Imgproc.circle(dst, center, 3, new Scalar(255, 0, 0), 5);
+                Imgproc.circle(dst, center, radius, new Scalar(0, 255, 0), 2);
+            }
+        }
+
+        circles.release();
+        return dst;
     }
 
     private static double distance2(Point pt1, Point pt2) {
