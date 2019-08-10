@@ -14,7 +14,12 @@ import android.text.TextWatcher;
 import android.util.Log;
 import android.view.SurfaceView;
 import android.view.View;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.CheckBox;
+import android.widget.CompoundButton;
 import android.widget.EditText;
+import android.widget.Spinner;
 import android.widget.TextView;
 
 import org.opencv.android.CameraBridgeViewBase;
@@ -44,15 +49,24 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     private TextView viewModeTv;
     private EditText cannyLowTv;
     private EditText cannyHighTv;
+    private CheckBox areaFilterCb;
+    private Spinner modeSelector;
+
     private static final int VIEW_MODE_FEATURES   = 0;
     private static final int VIEW_MODE_CANNY   = 1;
     private static final int VIEW_MODE_NUM = 2;
+
+    private static final int DEBUG_MODE_ALL = 0;
+    private static final int DEBUG_MODE_ONLY_CHAMBER = 1;
+    private static final int DEBUG_MODE_ONLY_DROPS = 2;
 
     private static final int MAX_TIMES_TILL_RESET = 10;
     private static final int MAX_DISTANCE_TO_IGNORE = 500;
 
     private int cannyLow = 15;
     private int cannyHigh = 25;
+    private boolean filterArea = true;
+    private int selectedMode = DEBUG_MODE_ONLY_CHAMBER;
 
     private int mViewMode = 0;
     private Mat dsIMG, usIMG, bwIMG, cIMG, hovIMG;
@@ -73,9 +87,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
         setContentView(R.layout.activity_main);
         setControllers();
 
-        viewModeTv = findViewById(R.id.mode_tv);
-        changeMode(VIEW_MODE_FEATURES);
-
         cameraView = findViewById(R.id.cameraView);
         cameraView.setVisibility(SurfaceView.VISIBLE);
         cameraView.setCvCameraViewListener(this);
@@ -83,14 +94,6 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             @Override
             public void onClick(View v) {
                 cameraView.setFocus();
-            }
-        });
-
-        viewModeTv.setOnLongClickListener(new View.OnLongClickListener() {
-            @Override
-            public boolean onLongClick(View v) {
-                changeMode((mViewMode + 1) % (VIEW_MODE_NUM));
-                return true;
             }
         });
     }
@@ -138,6 +141,44 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
             @Override
             public void afterTextChanged(Editable s) {
 
+            }
+        });
+
+        viewModeTv = findViewById(R.id.mode_tv);
+        changeMode(VIEW_MODE_FEATURES);
+        viewModeTv.setOnLongClickListener(new View.OnLongClickListener() {
+            @Override
+            public boolean onLongClick(View v) {
+                changeMode((mViewMode + 1) % (VIEW_MODE_NUM));
+                return true;
+            }
+        });
+
+        areaFilterCb = findViewById(R.id.filterarea);
+        areaFilterCb.setChecked(filterArea);
+        areaFilterCb.setOnCheckedChangeListener(new CompoundButton.OnCheckedChangeListener() {
+            @Override
+            public void onCheckedChanged(CompoundButton buttonView, boolean isChecked) {
+                filterArea = isChecked;
+            }
+        });
+
+        modeSelector = findViewById(R.id.modespinner);
+        ArrayList<String> modeList = new ArrayList<>();
+        modeList.add("ALL");
+        modeList.add("CHAMBER");
+        modeList.add("DROPS");
+        modeSelector.setAdapter(new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, modeList));
+        modeSelector.setSelection(selectedMode);
+        modeSelector.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
+            @Override
+            public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
+                selectedMode = position;
+            }
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {
+                selectedMode = DEBUG_MODE_ALL;
             }
         });
     }
@@ -273,8 +314,13 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
         try {
 
-            detectDropChamber(dst, gray);
-//            detectDrops(dst, gray);
+            if (selectedMode != DEBUG_MODE_ONLY_DROPS) {
+                detectDropChamber(dst, gray);
+            }
+
+            if (selectedMode != DEBUG_MODE_ONLY_CHAMBER) {
+                detectDrops(dst, gray);
+            }
 
         } catch (Exception e) {
             Log.e("bla", "onCameraFrame: ", e);
@@ -316,7 +362,7 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
 
             boolean inSize = contourArea > 6000 && contourArea < 20000;
 
-            if (!inSize) {
+            if (!inSize && filterArea) {
                 continue;
             }
 
@@ -432,12 +478,17 @@ public class MainActivity extends AppCompatActivity implements CameraBridgeViewB
     }
 
     private Mat detectDrops(Mat dst, Mat gray) {
-        //if (dropChamberArea == null) {
-        //    return dst;
-        //}
 
-        //Point topLeft = dropChamberArea[0];
-        //Point bottomRight = dropChamberArea[1];
+        if (selectedMode != DEBUG_MODE_ONLY_DROPS) {
+
+            if (dropChamberArea == null) {
+                return dst;
+            }
+
+            Point topLeft = dropChamberArea[0];
+            Point bottomRight = dropChamberArea[1];
+
+        }
 
         Mat circles = new Mat();
 
